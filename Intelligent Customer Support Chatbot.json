@@ -1,0 +1,389 @@
+{
+  "name": "Intelligent Customer Support Chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "chat-webhook-id",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1a01500f-42de-4de3-80d6-847bfde61b12",
+      "name": "Web Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1328,
+        256
+      ],
+      "webhookId": "chat-webhook-id"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "options": {}
+      },
+      "id": "045401de-b254-4fb7-86c1-fbee2956f98d",
+      "name": "Create Support Ticket",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        48
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "fe3a9ac4-17ac-4173-a213-aec465497917",
+      "name": "Route by Intent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -672,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "messages"
+      },
+      "id": "40a050b6-df27-478b-b626-d45d7bac01f7",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        -736,
+        608
+      ],
+      "webhookId": "2c4a3e4a-3275-4d1d-9d71-19f7e534dd23"
+    },
+    {
+      "parameters": {
+        "options": {
+          "maxTokens": 500,
+          "temperature": 0.7
+        },
+        "requestOptions": {}
+      },
+      "id": "d1804cdf-d001-48a6-9632-9cccb3cd80e1",
+      "name": "Generate AI Response",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract intent from message\nconst message = items[0].json.webhookBody.message.toLowerCase();\n\nlet intent = 'general';\nlet priority = 'Low';\n\n// Intent detection logic\nif (message.includes('refund') || message.includes('return')) {\n  intent = 'refund';\n  priority = 'Medium';\n} else if (message.includes('broken') || message.includes('not working')) {\n  intent = 'technical';\n  priority = 'High';\n} else if (message.includes('order') || message.includes('track')) {\n  intent = 'order_status';\n  priority = 'Medium';\n} else if (message.includes('billing') || message.includes('payment')) {\n  intent = 'billing';\n  priority = 'High';\n} else if (message.includes('cancel') || message.includes('stop')) {\n  intent = 'cancellation';\n  priority = 'Medium';\n}\n\n// Add metadata\nreturn [{\n  json: {\n    intent,\n    priority,\n    timestamp: new Date().toISOString(),\n    customer_message: items[0].json.webhookBody.message,\n    customer_id: items[0].json.webhookBody.customerId || 'guest',\n    channel: items[0].json.webhookBody.channel || 'web'\n  }\n}];"
+      },
+      "id": "a7706f54-3602-427e-80ef-833d09a5001d",
+      "name": "Detect Intent & Priority",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -864,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "subject": "Support Ticket Created: {{$json[\"intent\"]}}",
+        "options": {}
+      },
+      "id": "992fe751-ceb4-4365-a31d-318e44cab47f",
+      "name": "Email Support Team",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"priority\"]}}",
+              "operation": "equals",
+              "value2": "High"
+            }
+          ]
+        }
+      },
+      "id": "5f082866-676d-4c1b-9df2-cc9c48c07d39",
+      "name": "Check for Escalation",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -432,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send"
+      },
+      "id": "1d951ee6-6ccc-41d9-bbc7-54a8ab5149e8",
+      "name": "Slack Escalation Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -112
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Log interaction to Google Sheets or database\nconst logEntry = {\n  timestamp: items[0].json.timestamp,\n  customer_id: items[0].json.customer_id,\n  intent: items[0].json.intent,\n  priority: items[0].json.priority,\n  message: items[0].json.customer_message,\n  ai_response: items[0].json['gpt-response'],\n  channel: items[0].json.channel,\n  escalated: items[0].json.priority === 'High' ? 'YES' : 'NO',\n  ticket_id: items[0].json.ticket_id || 'PENDING'\n};\n\nreturn [{\n  json: logEntry\n}];"
+      },
+      "id": "02d9eace-64a3-495e-b52a-e7ec03618a03",
+      "name": "Log Conversation",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        0,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": "YOUR_SHEET_ID",
+        "range": "A1",
+        "options": {}
+      },
+      "id": "e3fa29b8-3db9-41af-becd-ddaa1f9abeb0",
+      "name": "Google Sheets Logger",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 2,
+      "position": [
+        224,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "ee6ac633-ad20-4c0c-8025-817c4be0456e",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "subject": "Thank you for contacting support!",
+        "options": {}
+      },
+      "id": "f7d8f205-db59-4563-a29c-8670b4279f83",
+      "name": "Send Follow-up Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        656
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "ac900183-4e55-4899-bf9e-c895a33b955e",
+      "name": "Route by Channel",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        -1152,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.zapier.com/hooks/catch/.../",
+        "options": {}
+      },
+      "id": "7ce1af7b-0938-4cdb-9412-748b878a52b3",
+      "name": "Update CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        64,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "4cd47dfc-728f-4d9d-ac74-9586c342d8c6",
+      "name": "Set Response Variables",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        656
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Web Chat Webhook": {
+      "main": [
+        [
+          {
+            "node": "Detect Intent & Priority",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Route by Channel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Intent & Priority": {
+      "main": [
+        [
+          {
+            "node": "Route by Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Intent": {
+      "main": [
+        [
+          {
+            "node": "Check for Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Escalation": {
+      "main": [
+        [
+          {
+            "node": "Create Support Ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack Escalation Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Support Ticket": {
+      "main": [
+        [
+          {
+            "node": "Log Conversation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate AI Response": {
+      "main": [
+        [
+          {
+            "node": "Set Response Variables",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Channel": {
+      "main": [
+        [
+          {
+            "node": "Generate AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send WhatsApp Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Response Variables": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Follow-up Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Support Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Conversation": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets Logger",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Update CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "80a4ee76-0ff7-42b3-8865-17ab9d8a3bc7",
+  "meta": {
+    "instanceId": "f21b6cb0e4e7627e806ed40852c3e82c0eab25fb371c10dfbaba83cf3b2aaae4"
+  },
+  "id": "5tJK9IZCuqlDxMye5VYRb",
+  "tags": []
+}
